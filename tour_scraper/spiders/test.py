@@ -57,14 +57,12 @@ class DuLichVietSpider(scrapy.Spider):
     xuất phát, giá từ, trải nghiệm, điểm nhấn hành trình, lịch trình, 
     dịch vụ bao gồm, dịch vụ không bao gồm, ghi chú
     """
-    name = "dulichviet"
+    name = "test"
     allowed_domains = ["dulichviet.com.vn"]
      
     start_urls = [
-        "https://dulichviet.com.vn/du-lich-trong-nuoc/du-lich-dong-bac-mua-thu-tour-xuyen-bien-gioi-thac-ban-gioc-duc-thien-trung-quoc-tu-sai-gon",
-        "https://dulichviet.com.vn/loai-hinh-du-lich/du-lich-da-nang-mua-thu-hue-dong-phong-nha-4n3d-tu-sai-gon",
-        "https://dulichviet.com.vn/du-lich-trong-nuoc/tour-mien-trung-mua-dong-4n3d-ha-noi-da-lat-nha-trang-ha-noi",
-        "https://dulichviet.com.vn/du-lich-trong-nuoc/tour-mien-tay-3n2d-my-tho-ben-tre-can-tho-chau-doc",
+        "https://dulichviet.com.vn/du-lich-trong-nuoc/tour-dong-thap-1n-lang-hoa-sa-dec-quyt-hong-lai-vung-cho-que-tan-thuan-dong",
+        "https://dulichviet.com.vn/du-lich-trong-nuoc/tour-mien-tay-tet-nguyen-dan-2n1d-cai-be-dong-thap-cho-que-tan-thuan-dong"
     ]
 
     custom_settings = {
@@ -340,11 +338,9 @@ class DuLichVietSpider(scrapy.Spider):
         dich_vu_khong_bao_gom = []
         flag3 = response.xpath('//div[@id="flag3"]')
         if flag3:
-            # Lấy toàn bộ text từ div the-content, clean và split lines
             full_text = ' '.join(flag3.xpath('.//div[contains(@class, "the-content") or contains(@class, "desc")]//text()').getall())
-            full_text = re.sub(r'\s+', ' ', full_text).strip()  # Clean extra spaces
+            full_text = re.sub(r'\s+', ' ', full_text).strip()
             
-            # Normalize headers (ignore case, remove accents for matching)
             def normalize(text):
                 text = text.lower()
                 text = re.sub(r'[áàảãạăắằẳẵặâấầẩẫậ]', 'a', text)
@@ -358,7 +354,6 @@ class DuLichVietSpider(scrapy.Spider):
             
             normalized_full = normalize(full_text)
             
-            # Tìm vị trí headers
             bao_gom_patterns = [
                 'gia tour bao gom', 'dich vu bao gom', 'bao gom', 
                 'gia tour bao gom:', 'dich vu bao gom:', 'bao gom:'
@@ -385,21 +380,22 @@ class DuLichVietSpider(scrapy.Spider):
                     self.logger.info(f">>> Found excluded header at {match}: {pattern}")
                     break
             
-            # Extract content between headers
+            # FIXED: Kiểm tra None trước khi gọi .strip()
             if bao_gom_start is not None:
                 end = khong_bao_gom_start if khong_bao_gom_start else len(full_text)
                 bao_gom_text = full_text[bao_gom_start:end].strip()
-                # Split into items by bullets or sentences
                 items = re.split(r'(?<=[\.\?!;])\s+|\n+|- |\• |\* |;', bao_gom_text)
-                for service_item in items:  # Changed 'item' to 'service_item'
-                    cleaned = self.clean_text(service_item).strip()
-                    if cleaned and len(cleaned) > 10 and not any(p in normalize(cleaned) for p in khong_bao_gom_patterns + ['ghi chu', 'luu y']):
-                        dich_vu_bao_gom.append(cleaned)
-                        self.logger.debug(f"  [BAO GỒM] + {cleaned[:50]}...")
+                for service_item in items:
+                    cleaned = self.clean_text(service_item)
+                    # FIXED: Kiểm tra cleaned != None trước khi .strip()
+                    if cleaned:
+                        cleaned = cleaned.strip()
+                        if cleaned and len(cleaned) > 10 and not any(p in normalize(cleaned) for p in khong_bao_gom_patterns + ['ghi chu', 'luu y']):
+                            dich_vu_bao_gom.append(cleaned)
+                            self.logger.debug(f"  [BAO GỒM] + {cleaned[:50]}...")
             
             if khong_bao_gom_start is not None:
                 khong_bao_gom_text = full_text[khong_bao_gom_start:].strip()
-                # Stop at unrelated sections
                 stop_patterns = ['ghi chu', 'luu y', 'quy dinh', 'dieu kien', 'gia ve danh cho tre em', 'cac quy dinh', 'thu tuc']
                 stop_pos = len(khong_bao_gom_text)
                 for pattern in stop_patterns:
@@ -409,13 +405,16 @@ class DuLichVietSpider(scrapy.Spider):
                 khong_bao_gom_text = khong_bao_gom_text[:stop_pos].strip()
                 
                 items = re.split(r'(?<=[\.\?!;])\s+|\n+|- |\• |\* |;', khong_bao_gom_text)
-                for service_item in items:  # Changed 'item' to 'service_item'
-                    cleaned = self.clean_text(service_item).strip()
-                    if cleaned and len(cleaned) > 10:
-                        dich_vu_khong_bao_gom.append(cleaned)
-                        self.logger.debug(f"  [KHÔNG BAO GỒM] + {cleaned[:50]}...")
+                for service_item in items:
+                    cleaned = self.clean_text(service_item)
+                    # FIXED: Kiểm tra cleaned != None trước khi .strip()
+                    if cleaned:
+                        cleaned = cleaned.strip()
+                        if cleaned and len(cleaned) > 10:
+                            dich_vu_khong_bao_gom.append(cleaned)
+                            self.logger.debug(f"  [KHÔNG BAO GỒM] + {cleaned[:50]}...")
 
-            # Fallback: if no patterns found, try extracting from <li>
+            # Fallback
             if not dich_vu_bao_gom and not dich_vu_khong_bao_gom:
                 lis = flag3.xpath('.//li')
                 for li in lis:

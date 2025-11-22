@@ -25,7 +25,7 @@ FEED_EXPORT_ENCODING = "utf-8"
 LOG_LEVEL = 'INFO'
 
 FEEDS = {
-    'tours_miennam.json': {
+    'test_data.json': {
         'format': 'json',
         'encoding': 'utf8',
         'store_empty': False,
